@@ -12,5 +12,6 @@ typedef struct {
 } CPUState;
 
 void cpu_init(CPUState *cpu, uint64_t entry_point, uint64_t stack_ptr);
+void cpu_dump(CPUState *cpu);
 
 #endif

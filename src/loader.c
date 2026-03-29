@@ -5,6 +5,7 @@
 #include <sys/mman.h>
 #include <elf.h>
 #include <string.h>
+#include <errno.h>
 #include "../include/loader.h"
 
 #define PAGE_SIZE 4096
@@ -41,6 +42,8 @@ LoadedELF load_elf(const char *filename) {
         exit(1);
     }
 
+    uint64_t vaddr_offset = 0;
+
     for (int i = 0; i < header.e_phnum; i++) {
         if (phdrs[i].p_type == PT_LOAD) {
             uint64_t vaddr = phdrs[i].p_vaddr;
@@ -51,23 +54,31 @@ LoadedELF load_elf(const char *filename) {
             uint64_t aligned_vaddr = PAGE_ALIGN(vaddr);
             uint64_t aligned_memsz = PAGE_ALIGN_UP(vaddr + memsz) - aligned_vaddr;
 
-            void *addr = mmap((void *)aligned_vaddr, aligned_memsz,
-                              PROT_READ | PROT_WRITE | PROT_EXEC,
+            // In Termux, we can't map to address 0.
+            // If the ELF wants address 0, we must offset it.
+            // For simplicity, let's always use an offset if the requested address is below a threshold.
+            if (vaddr < 0x400000 && vaddr_offset == 0) {
+                vaddr_offset = 0x400000;
+            }
+
+            void *addr = mmap((void *)(aligned_vaddr + vaddr_offset), aligned_memsz,
+                              PROT_READ | PROT_WRITE,
                               MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS, -1, 0);
 
             if (addr == MAP_FAILED) {
-                perror("[Mimic] Error al mapear segmento");
+                fprintf(stderr, "[Mimic] Error al mapear segmento at 0x%lx (size 0x%lx): %s\n",
+                        aligned_vaddr + vaddr_offset, aligned_memsz, strerror(errno));
                 exit(1);
             }
 
             lseek(fd, offset, SEEK_SET);
-            if (read(fd, (void *)vaddr, filesz) != (ssize_t)filesz) {
+            if (read(fd, (void *)(vaddr + vaddr_offset), filesz) != (ssize_t)filesz) {
                 perror("[Mimic] Error al leer segmento");
                 exit(1);
             }
 
             if (memsz > filesz) {
-                memset((void *)(vaddr + filesz), 0, memsz - filesz);
+                memset((void *)(vaddr + vaddr_offset + filesz), 0, memsz - filesz);
             }
         }
     }
@@ -84,7 +95,7 @@ LoadedELF load_elf(const char *filename) {
     close(fd);
 
     LoadedELF loaded;
-    loaded.entry_point = header.e_entry;
+    loaded.entry_point = header.e_entry + vaddr_offset;
     loaded.stack_base = (uint64_t)stack_addr;
     loaded.stack_ptr = (uint64_t)stack_addr + stack_size;
 

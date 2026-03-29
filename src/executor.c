@@ -3,6 +3,10 @@
 #include "../include/executor.h"
 #include "../include/decoder.h"
 #include "../include/syscall.h"
+#include "../include/cpu.h"
+
+#define ZF (1 << 6) // Zero Flag
+#define SF (1 << 7) // Sign Flag
 
 uint64_t *get_reg(CPUState *cpu, uint8_t reg) {
     switch (reg) {
@@ -14,6 +18,14 @@ uint64_t *get_reg(CPUState *cpu, uint8_t reg) {
         case 5: return &cpu->rbp;
         case 6: return &cpu->rsi;
         case 7: return &cpu->rdi;
+        case 8: return &cpu->r8;
+        case 9: return &cpu->r9;
+        case 10: return &cpu->r10;
+        case 11: return &cpu->r11;
+        case 12: return &cpu->r12;
+        case 13: return &cpu->r13;
+        case 14: return &cpu->r14;
+        case 15: return &cpu->r15;
         default: return NULL;
     }
 }
@@ -24,7 +36,13 @@ void execute(CPUState *cpu) {
         DecodedInstruction inst = decode(code, cpu->rip);
 
         if (inst.type == INST_UNKNOWN) {
-            fprintf(stderr, "[Mimic] Instrucción desconocida en 0x%lx: 0x%x\n", cpu->rip, *code);
+            fprintf(stderr, "\n[Mimic] PANIC: Instrucción desconocida en 0x%lx\n", cpu->rip);
+            fprintf(stderr, "[Mimic] Opcode bytes:");
+            for (int i = 0; i < 8; i++) {
+                fprintf(stderr, " %02x", code[i]);
+            }
+            fprintf(stderr, "\n");
+            cpu_dump(cpu);
             exit(1);
         }
 
@@ -69,6 +87,50 @@ void execute(CPUState *cpu) {
             }
             case INST_JMP: {
                 cpu->rip = next_rip + (int8_t)inst.imm;
+                break;
+            }
+            case INST_JMP_REL32: {
+                cpu->rip = next_rip + (int32_t)inst.imm;
+                break;
+            }
+            case INST_JZ: {
+                if (cpu->rflags & ZF) cpu->rip = next_rip + (int8_t)inst.imm;
+                else cpu->rip = next_rip;
+                break;
+            }
+            case INST_JNZ: {
+                if (!(cpu->rflags & ZF)) cpu->rip = next_rip + (int8_t)inst.imm;
+                else cpu->rip = next_rip;
+                break;
+            }
+            case INST_LEA: {
+                uint64_t *reg = get_reg(cpu, inst.reg);
+                if (reg) *reg = inst.imm;
+                cpu->rip = next_rip;
+                break;
+            }
+            case INST_CMP_IMM: {
+                uint64_t *reg = get_reg(cpu, inst.reg);
+                if (reg) {
+                    uint64_t val = *reg;
+                    uint64_t res = val - inst.imm;
+                    if (res == 0) cpu->rflags |= ZF;
+                    else cpu->rflags &= ~ZF;
+                    if ((int64_t)res < 0) cpu->rflags |= SF;
+                    else cpu->rflags &= ~SF;
+                }
+                cpu->rip = next_rip;
+                break;
+            }
+            case INST_XOR: {
+                uint64_t *reg1 = get_reg(cpu, inst.reg);
+                uint64_t *reg2 = get_reg(cpu, inst.reg2);
+                if (reg1 && reg2) {
+                    *reg1 ^= *reg2;
+                    if (*reg1 == 0) cpu->rflags |= ZF;
+                    else cpu->rflags &= ~ZF;
+                }
+                cpu->rip = next_rip;
                 break;
             }
             default:
