@@ -21,6 +21,7 @@ typedef enum {
     INST_LEA,
     INST_CMP_IMM,
     INST_MOV_REG,
+    INST_MOV_STORE,
     INST_XOR,
     INST_NOP
 } InstructionType;

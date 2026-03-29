@@ -55,6 +55,23 @@ void execute(CPUState *cpu) {
                 cpu->rip = next_rip;
                 break;
             }
+            case INST_MOV_REG: {
+                uint64_t *src = get_reg(cpu, inst.reg);
+                uint64_t *dest = get_reg(cpu, inst.reg2);
+                if (src && dest) *dest = *src;
+                cpu->rip = next_rip;
+                break;
+            }
+            case INST_MOV_STORE: {
+                uint64_t *src = get_reg(cpu, inst.reg);
+                uint64_t *base = get_reg(cpu, inst.reg2);
+                if (src && base) {
+                    uint64_t addr = *base + (int64_t)inst.imm;
+                    *(uint64_t *)addr = *src;
+                }
+                cpu->rip = next_rip;
+                break;
+            }
             case INST_CALL: {
                 cpu->rsp -= 8;
                 *(uint64_t *)cpu->rsp = next_rip;
@@ -130,6 +147,10 @@ void execute(CPUState *cpu) {
                     if (*reg1 == 0) cpu->rflags |= ZF;
                     else cpu->rflags &= ~ZF;
                 }
+                cpu->rip = next_rip;
+                break;
+            }
+            case INST_NOP: {
                 cpu->rip = next_rip;
                 break;
             }
