@@ -1,24 +1,24 @@
 #include <stdio.h>
-#include "../include/decoder.h"
-#include "../include/translator.h"
+#include <stdlib.h>
+#include "../include/loader.h"
+#include "../include/cpu.h"
 #include "../include/executor.h"
 
-int main() {
-    unsigned char program[] = {
-        0xB8, // mov eax, imm
-        0x05  // add eax, imm
-    };
-
-    int size = sizeof(program);
-
-    printf("[Mimic] Traductor x86 -> ARM64\n");
-
-    for(int i = 0; i < size; i++) {
-        Instruction inst = decode(program[i]);
-        translate(inst);
+int main(int argc, char **argv) {
+    if (argc < 2) {
+        printf("Uso: %s <binario_x86_64>\n", argv[0]);
+        return 1;
     }
 
-    execute();
+    printf("[Mimic] Cargando %s...\n", argv[1]);
+
+    LoadedELF elf = load_elf(argv[1]);
+
+    CPUState cpu;
+    cpu_init(&cpu, elf.entry_point, elf.stack_ptr);
+
+    printf("[Mimic] Empezando interpretación...\n");
+    execute(&cpu);
 
     return 0;
 }
