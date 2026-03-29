@@ -3,6 +3,8 @@
 
 #include "decoder.h"
 
-void translate(Instruction inst);
+// Cambia 'Instruction' por 'DecodedInstruction'
+void translate(DecodedInstruction inst);
 
 #endif
+
